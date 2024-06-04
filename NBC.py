@@ -10,32 +10,35 @@ from sklearn.naive_bayes import MultinomialNB
 import numpy as np
 import pylab as pl
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
 
 def MakeWordsSet(words_file):
     words_set = set()
-    with open(words_file, 'r') as fp:
+    with open(words_file, 'r',encoding = 'utf-8') as fp:
         for line in fp.readlines():
-            word = line.strip().decode("utf-8")
+            word = line.strip()
             if len(word)>0 and word not in words_set: # 去重
                 words_set.add(word)
     return words_set
 
 def TextProcessing(folder_path, test_size=0.2):
-    folder_list = os.listdir(folder_path)
+    folder_list = os.listdir(folder_path) # 查看folder_path下的文件
     data_list = []
     class_list = []
 
     # 类间循环
     for folder in folder_list:
         new_folder_path = os.path.join(folder_path, folder)
-        files = os.listdir(new_folder_path)
+        files = os.listdir(new_folder_path) #获取子文件夹中的所有文件
+
         # 类内循环
         j = 1
+        # 遍历每个文件
         for file in files:
             if j > 100: # 每类text样本数最多100
                 break
-            with open(os.path.join(new_folder_path, file), 'r') as fp:
+            with open(os.path.join(new_folder_path, file), 'r',encoding = 'utf-8') as fp:
                raw = fp.read()
             # print raw
             ## --------------------------------------------------------------------------------
@@ -47,12 +50,12 @@ def TextProcessing(folder_path, test_size=0.2):
             # print word_list
             ## --------------------------------------------------------------------------------
             data_list.append(word_list)
-            class_list.append(folder.decode('utf-8'))
+            class_list.append(folder)
             j += 1
 
     ## 划分训练集和测试集
     # train_data_list, test_data_list, train_class_list, test_class_list = sklearn.cross_validation.train_test_split(data_list, class_list, test_size=test_size)
-    data_class_list = zip(data_list, class_list)
+    data_class_list = list(zip(data_list, class_list))  # 打包为list，元素为元组
     random.shuffle(data_class_list)
     index = int(len(data_class_list)*test_size)+1
     train_list = data_class_list[index:]
@@ -64,28 +67,26 @@ def TextProcessing(folder_path, test_size=0.2):
     all_words_dict = {}
     for word_list in train_data_list:
         for word in word_list:
-            if all_words_dict.has_key(word):
+            if word in all_words_dict:
                 all_words_dict[word] += 1
             else:
                 all_words_dict[word] = 1
     # key函数利用词频进行降序排序
     all_words_tuple_list = sorted(all_words_dict.items(), key=lambda f:f[1], reverse=True) # 内建函数sorted参数需为list
-    all_words_list = list(zip(*all_words_tuple_list)[0])
+    all_words_list = [word for words_tuple in all_words_tuple_list for word in words_tuple]
 
     return all_words_list, train_data_list, test_data_list, train_class_list, test_class_list
 
 
-def words_dict(all_words_list, deleteN, stopwords_set=set()):
-    # 选取特征词
+def words_dict(all_words_list, deleteN, stopwords_set, min_features=1):
     feature_words = []
-    n = 1
-    for t in range(deleteN, len(all_words_list), 1):
-        if n > 1000: # feature_words的维度1000
-            break
-        # print all_words_list[t]
-        if not all_words_list[t].isdigit() and all_words_list[t] not in stopwords_set and 1<len(all_words_list[t])<5:
+    n = 0
+    for t in range(len(all_words_list)):
+        if isinstance(all_words_list[t], str) and not all_words_list[t].isdigit() and all_words_list[t] not in stopwords_set and len(all_words_list[t]) >= 2:
             feature_words.append(all_words_list[t])
             n += 1
+            if n >= min_features:
+                break
     return feature_words
 
 
@@ -108,37 +109,20 @@ def TextFeatures(train_data_list, test_data_list, feature_words, flag='nltk'):
     return train_feature_list, test_feature_list
 
 
-def TextClassifier(train_feature_list, test_feature_list, train_class_list, test_class_list, flag='nltk'):
-    ## -----------------------------------------------------------------------------------
-    if flag == 'nltk':
-        ## nltk分类器
-        train_flist = zip(train_feature_list, train_class_list)
-        test_flist = zip(test_feature_list, test_class_list)
-        classifier = nltk.classify.NaiveBayesClassifier.train(train_flist)
-        # print classifier.classify_many(test_feature_list)
-        # for test_feature in test_feature_list:
-        #     print classifier.classify(test_feature),
-        # print ''
-        test_accuracy = nltk.classify.accuracy(classifier, test_flist)
-    elif flag == 'sklearn':
-        ## sklearn分类器
-        classifier = MultinomialNB().fit(train_feature_list, train_class_list)
-        # print classifier.predict(test_feature_list)
-        # for test_feature in test_feature_list:
-        #     print classifier.predict(test_feature)[0],
-        # print ''
-        test_accuracy = classifier.score(test_feature_list, test_class_list)
-    else:
-        test_accuracy = []
+def TextClassifier(train_feature_list, test_feature_list, train_class_list, test_class_list, flag):
+    if not train_feature_list or not test_feature_list:
+        return 0
+    classifier = MultinomialNB().fit(train_feature_list, train_class_list)
+    test_accuracy = classifier.score(test_feature_list, test_class_list)
     return test_accuracy
 
 
 if __name__ == '__main__':
 
-    print "start"
+    print("start")
 
     ## 文本预处理
-    folder_path = './Database/SogouC/Sample'
+    folder_path = r'D:\github项目\贝叶斯分类\Naive-Bayes-Classifier\Database\SogouC\Sample'
     all_words_list, train_data_list, test_data_list, train_class_list, test_class_list = TextProcessing(folder_path, test_size=0.2)
 
     # 生成stopwords_set
@@ -156,7 +140,7 @@ if __name__ == '__main__':
         train_feature_list, test_feature_list = TextFeatures(train_data_list, test_data_list, feature_words, flag)
         test_accuracy = TextClassifier(train_feature_list, test_feature_list, train_class_list, test_class_list, flag)
         test_accuracy_list.append(test_accuracy)
-    print test_accuracy_list
+    print("test_accuracy_list:\n",test_accuracy_list)
 
     # 结果评价
     plt.figure()
@@ -166,4 +150,4 @@ if __name__ == '__main__':
     plt.ylabel('test_accuracy')
     plt.savefig('result.png')
 
-    print "finished"
+    print("finished")
